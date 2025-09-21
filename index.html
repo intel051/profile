@@ -14,7 +14,7 @@
             background-color: #f7f7f7;
             border: 2px dashed #e0e0e0;
             transition: all 0.2s ease;
-            position: relative; /* 자식 요소를 위한 상대 위치 설정 */
+            position: relative;
             cursor: pointer;
         }
         .file-upload-box.active {
@@ -75,11 +75,11 @@
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
 
     <!-- 메인 컨테이너 -->
-    <div class="w-full max-w-5xl bg-white rounded-3xl shadow-2xl p-8 md:p-12 text-center">
+    <div class="w-full max-w-5xl bg-white rounded-3xl shadow-2xl p-6 sm:p-8 md:p-12 text-center">
         
         <!-- 타이틀 및 설명 -->
-        <h1 class="text-4xl md:text-5xl font-bold text-gray-800 mb-2">AI 프로필 사진 생성기</h1>
-        <p class="text-lg text-gray-500 mb-8">
+        <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-800 mb-2">AI 프로필 사진 생성기</h1>
+        <p class="text-base sm:text-lg text-gray-500 mb-8">
             사진 한 장으로 새로운 프로필 사진을 만들어 보세요.
         </p>
 
@@ -93,7 +93,7 @@
         </div>
 
         <!-- 파일 업로드 영역 -->
-        <div id="file-upload-area" class="file-upload-box p-8 rounded-xl">
+        <div id="file-upload-area" class="file-upload-box p-6 sm:p-8 rounded-xl">
             <div class="file-input-wrapper">
                 <input type="file" id="file-input" accept="image/png, image/jpeg, image/webp">
             </div>
@@ -125,7 +125,7 @@
         </div>
 
         <!-- 생성된 이미지를 표시할 영역 -->
-        <div id="image-grid" class="mt-12 grid grid-cols-2 md:grid-cols-5 gap-6 justify-center">
+        <div id="image-grid" class="mt-12 grid grid-cols-2 md:grid-cols-4 gap-6 justify-center">
             <!-- 이미지가 여기에 동적으로 추가됩니다 -->
         </div>
 
@@ -140,7 +140,7 @@
         const apiKey = import.meta.env.VITE_API_KEY;
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
         const MAX_RETRIES = 3;
-        const RETRY_DELAY = 3000; // 1초
+        const RETRY_DELAY = 1000; // 1초
         
         const PROMPTS = {
             female: [
@@ -155,6 +155,7 @@
                 "내가 지금 올린 사진으로 기본 얼굴로 만들어 주세요. 얼굴과 얼굴형은 최대한 바꾸지 않습니다. 1080x1920 세로 인물 사진을 만들어 주세요. 똑같은 얼굴 특징을 사용하고, 강렬한 시네마틱 조명과 뚜렷한 대비가 특징입니다. 약간 낮은, 위를 향한 각도로 촬영하여 피사체의 턱선과 목을 드라마틱하게 강조하고, 구성은 조용한 지배력과 조각 같은 남성적인 우아함을 자아냅니다. 배경은 깊고 채도 높은 진홍색으로, 모델의 빛나는 피부와 어두운 의상과 대담한 시각적 충돌을 일으킵니다.",
                 "내가 지금 올린 사진으로 기본 얼굴로 만들어 주세요. 얼굴과 얼굴형은 최대한 바꾸지 않습니다. 얇은 피부를 지닌 젊은 남성의 흑백 예술 인물사진입니다. 살짝 흐트러진 머리카락이 그의 얼굴을 감싸고 있고, 오버사이즈의 흰색 셔츠를 입고 있습니다. 포즈: 한 손을 턱 아래에 살포시 얹고 앉아 차분하고 사려 깊은 표정으로 카메라를 응시합니다. 배경은 단순한 회색 스튜디오이고, 부드러운 영화 같은 조명과 미니멀한 구도가 특징입니다."
                 "내가 지금 올린 사진으로 기본 얼굴로 만들어 주세요. 한국 남성 머리스타일로 꾸며주고, 얼굴과 얼굴형은 거의 바꾸지 말아줘. 팔짱을 낀 채 비스듬히 서서 정면을 바라보고 있어. 부드러운 미소를 짓고 있고, 옷은 흰색 반팔 티셔츠 위에 검정색 블레이저를 입고 있어. 바지는 화이트진이고. 하반신은 조금만 나오게 해서 스튜디오에서 촬영한 듯한 프로필 사진을 만들어줘."
+            
             ]
         };
 
@@ -163,9 +164,9 @@
         const fileInput = document.getElementById('file-input');
         const fileInfo = document.getElementById('file-info');
         const generateBtn = document.getElementById('generate-btn');
+        const actionButtons = document.getElementById('action-buttons');
         const regenerateBtn = document.getElementById('regenerate-btn');
         const resetBtn = document.getElementById('reset-btn');
-        const actionButtons = document.getElementById('action-buttons');
         const loadingSpinner = document.getElementById('loading-spinner');
         const loadingMessage = document.getElementById('loading-message');
         const imageGrid = document.getElementById('image-grid');
