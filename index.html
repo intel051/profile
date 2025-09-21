@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 프로필 사진 생성기</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+        }
+        .file-upload-box {
+            background-color: #f7f7f7;
+            border: 2px dashed #e0e0e0;
+            transition: all 0.2s ease;
+        }
+        .file-upload-box.active {
+            border-color: #667eea;
+            background-color: #eef2ff;
+        }
+        .spinner {
+            border-top-color: #fff;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .image-card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: transform 0.3s ease;
+            position: relative;
+        }
+        .image-card:hover {
+            transform: translateY(-5px);
+        }
+        .download-btn {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .image-card:hover .download-btn {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <!-- 메인 컨테이너 -->
+    <div class="w-full max-w-5xl bg-white rounded-3xl shadow-2xl p-8 md:p-12 text-center">
+        
+        <!-- 타이틀 및 설명 -->
+        <h1 class="text-4xl md:text-5xl font-bold text-gray-800 mb-2">AI 프로필 사진 생성기</h1>
+        <p class="text-lg text-gray-500 mb-8">
+            사진 한 장으로 새로운 프로필 사진을 만들어 보세요.
+        </p>
+
+        <!-- 성별 선택 영역 -->
+        <div class="mb-6 flex justify-center items-center gap-4">
+            <label for="gender-select" class="text-gray-700 font-semibold">성별 선택</label>
+            <select id="gender-select" class="p-2 rounded-lg border border-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="female">여성</option>
+                <option value="male">남성</option>
+            </select>
+        </div>
+
+        <!-- 파일 업로드 영역 -->
+        <div id="file-upload-area" class="file-upload-box p-8 rounded-xl cursor-pointer">
+            <input type="file" id="file-input" class="hidden" accept="image/png, image/jpeg, image/webp">
+            <p id="file-info" class="text-gray-500">
+                여기를 클릭하거나 파일을 끌어다 놓으세요.
+            </p>
+        </div>
+        
+        <!-- 버튼 영역 -->
+        <div class="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
+            <button id="generate-btn" class="hidden bg-blue-600 text-white font-semibold py-3 px-8 rounded-full shadow-lg hover:bg-blue-700 transition duration-300 w-full sm:w-auto">
+                프로필 사진 4개 생성하기
+            </button>
+            
+            <div id="action-buttons" class="hidden flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                <button id="regenerate-btn" class="bg-purple-600 text-white font-semibold py-3 px-8 rounded-full shadow-lg hover:bg-purple-700 transition duration-300 w-full sm:w-auto">
+                    다시 생성하기
+                </button>
+                <button id="reset-btn" class="bg-gray-400 text-white font-semibold py-3 px-8 rounded-full shadow-lg hover:bg-gray-500 transition duration-300 w-full sm:w-auto">
+                    초기화
+                </button>
+            </div>
+        </div>
+
+        <!-- 로딩 스피너 -->
+        <div id="loading-spinner" class="hidden mt-8">
+            <div class="inline-block h-8 w-8 rounded-full border-4 border-solid border-gray-200 spinner"></div>
+            <p id="loading-message" class="mt-2 text-gray-600">AI가 프로필 사진을 만들고 있어요...</p>
+        </div>
+
+        <!-- 생성된 이미지를 표시할 영역 -->
+        <div id="image-grid" class="mt-12 grid grid-cols-2 md:grid-cols-5 gap-6 justify-center">
+            <!-- 이미지가 여기에 동적으로 추가됩니다 -->
+        </div>
+
+        <!-- 에러 메시지 -->
+        <div id="error-message" class="hidden mt-8 p-4 bg-red-100 text-red-700 rounded-lg">
+        </div>
+        
+    </div>
+
+    <script>
+        // API 엔드포인트 및 키 정의
+        const apiKey = "AIzaSyCIuog-eeq0rL-g6kL9UIzdaJsa45jtApQ";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
+        const MAX_RETRIES = 3;
+        const RETRY_DELAY = 3000; // 1초
+        
+        const PROMPTS = {
+            female: [
+                "내가 지금 올린 사진으로 기본 얼굴로 만들어 주세요. 얼굴과 얼굴형은 최대한 바꾸지 않습니다. 세련된 검은색 터틀넥과 작고 시크한 금색 귀걸이를 착용하고 한국식 낮게 머리를 돌려서 묶은 한 여성의 고해상도 흑백 초상화입니다. 그녀는 미니멀한 스튜디오 환경에서 약간 옆으로 비스듬히 서 있고, 극적인 스튜디오 조명이 그녀의 얼굴과 배경에 대담한 기하학적 그림자를 만듭니다. 강한 빛줄기가 그림자를 가로지르고 있으며, 그녀의 표정은 차분하고 내성적이며 약간 멀어 보입니다. 전체적으로 영화 같은 분위기를 자아냅니다",
+                "스튜디오에서 평평하고 순수한 하얀 배경을 두고 나를 촬영해 줘. 우아하고 미니멀한 분위기를 풍기는 심플한 민소매 흰색 드레스를 입고 있어. 얼굴 특징을 강조하는 현대적인 묶음머리로 깔끔하게 스타일링했어. 또렷한 눈, 깔끔한 눈썹, 부드러운 블러셔, 자연스러운 핑크 입술에 초점을 맞춘 내추럴 글램 메이크업으로 여성스럽고 흠잡을 데 없는 모습을 연출했어. 여자가 하얀 테이블 위에 머리를 기댄 채 카메라를 부드럽고 매혹적인 표정으로 바라보고 있는 포즈야",
+                "내가 지금 올린 사진으로 기본 얼굴로 만들어 주세요. 얼굴과 얼굴형은 최대한 바꾸지 않습니다.1080x1920 세로 인물 사진을 만들어 주세요. 똑같은 얼굴 특징을 사용하고, 강렬한 시네마틱 조명과 뚜렷한 대비가 특징입니다. 약간 낮은, 위를 향한 각도로 촬영하여 피사체의 턱선과 목을 드라마틱하게 강조하고, 구성은 조용한 지배력과 조각 같은 우아함을 자아냅니다. 배경은 깊고 채도 높은 진홍색으로, 모델의 빛나는 피부와 어두운 의상과 대담한 시각적 충돌을 일으킵니다.",
+                "내가 지금 올린 사진으로 기본 얼굴로 만들어 주세요. 얼굴과 얼굴형은 최대한 바꾸지 않습니다. 얇은 피부를 지닌 젊은 여성의 흑백 예술 인물사진입니다. 살짝 흐트러진 긴 머리가 그녀의 섬세한 얼굴을 감싸고 있고, 오버사이즈의 흰색 셔츠를 입고 있습니다. 포즈: 한 손을 턱 아래에 살포시 얹고 앉아 차분하고 사려 깊은 표정으로 카메라를 응시합니다. 배경은 단순한 회색 스튜디오이고, 부드러운 영화 같은 조명과 미니멀한 구도가 특징입니다."
+            ],
+            male: [
+                "내가 지금 올린 사진으로 기본 얼굴로 만들어 주세요. 얼굴과 얼굴형은 최대한 바꾸지 않습니다. 세련된 검은색 터틀넥을 착용한 한 남성의 고해상도 흑백 초상화입니다. 그의 머리는 한국식으로 깔끔하게 스타일링되었습니다. 그는 미니멀한 스튜디오 환경에서 약간 옆으로 비스듬히 서 있고, 극적인 스튜디오 조명이 그의 얼굴과 배경에 대담한 기하학적 그림자를 만듭니다. 강한 빛줄기가 그림자를 가로지르고 있으며, 그의 표정은 차분하고 내성적이며 약간 멀어 보입니다. 전체적으로 영화 같은 분위기를 자아냅니다.",
+                "스튜디오에서 평평하고 순수한 하얀 배경을 두고 나를 촬영해 줘. 우아하고 미니멀한 분위기를 풍기는 심플한 흰색 셔츠를 입고 있어. 얼굴 특징을 강조하는 현대적인 헤어스타일로 깔끔하게 스타일링했어. 또렷한 눈, 깔끔한 눈썹에 초점을 맞춘 자연스러운 메이크업으로 남성스럽고 흠잡을 데 없는 모습을 연출했어. 남자가 하얀 테이블에 한 손을 짚은 채 카메라를 부드럽고 매혹적인 표정으로 바라보고 있는 포즈야.",
+                "내가 지금 올린 사진으로 기본 얼굴로 만들어 주세요. 얼굴과 얼굴형은 최대한 바꾸지 않습니다. 1080x1920 세로 인물 사진을 만들어 주세요. 똑같은 얼굴 특징을 사용하고, 강렬한 시네마틱 조명과 뚜렷한 대비가 특징입니다. 약간 낮은, 위를 향한 각도로 촬영하여 피사체의 턱선과 목을 드라마틱하게 강조하고, 구성은 조용한 지배력과 조각 같은 남성적인 우아함을 자아냅니다. 배경은 깊고 채도 높은 진홍색으로, 모델의 빛나는 피부와 어두운 의상과 대담한 시각적 충돌을 일으킵니다.",
+                "내가 지금 올린 사진으로 기본 얼굴로 만들어 주세요. 얼굴과 얼굴형은 최대한 바꾸지 않습니다. 얇은 피부를 지닌 젊은 남성의 흑백 예술 인물사진입니다. 살짝 흐트러진 머리카락이 그의 얼굴을 감싸고 있고, 오버사이즈의 흰색 셔츠를 입고 있습니다. 포즈: 한 손을 턱 아래에 살포시 얹고 앉아 차분하고 사려 깊은 표정으로 카메라를 응시합니다. 배경은 단순한 회색 스튜디오이고, 부드러운 영화 같은 조명과 미니멀한 구도가 특징입니다."
+            ]
+        };
+
+        // DOM 요소 가져오기
+        const fileUploadArea = document.getElementById('file-upload-area');
+        const fileInput = document.getElementById('file-input');
+        const fileInfo = document.getElementById('file-info');
+        const generateBtn = document.getElementById('generate-btn');
+        const regenerateBtn = document.getElementById('regenerate-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const actionButtons = document.getElementById('action-buttons');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const loadingMessage = document.getElementById('loading-message');
+        const imageGrid = document.getElementById('image-grid');
+        const errorMessage = document.getElementById('error-message');
+        const genderSelect = document.getElementById('gender-select');
+
+        let uploadedFile = null;
+
+        // 파일을 읽고 Base64로 변환하는 함수
+        const readFileAsBase64 = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+        };
+
+        // 이미지 다운로드 함수
+        const downloadImage = (base64Data, filename) => {
+            const link = document.createElement('a');
+            link.href = `data:image/png;base64,${base64Data}`;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        // 이미지 생성 함수 (각 프롬프트별로 1개 이미지를 순차적으로 요청)
+        const generateImages = async () => {
+            if (!uploadedFile) {
+                showError("이미지를 먼저 업로드해 주세요.");
+                return;
+            }
+
+            imageGrid.innerHTML = '';
+            showLoading(true);
+            showButtons(false);
+            showError(null);
+
+            const base64Data = await readFileAsBase64(uploadedFile);
+            const selectedGender = genderSelect.value;
+            const selectedPrompts = PROMPTS[selectedGender];
+
+            let allSuccessful = true;
+            let totalImagesGenerated = 0;
+
+            for (const prompt of selectedPrompts) {
+                totalImagesGenerated++;
+                loadingMessage.textContent = `AI가 프로필 사진 #${totalImagesGenerated}/${selectedPrompts.length}을 만들고 있어요...`;
+                
+                let success = false;
+                let retries = 0;
+
+                while (!success && retries < MAX_RETRIES) {
+                    try {
+                        const payload = {
+                            contents: [{
+                                parts: [
+                                    { text: prompt },
+                                    { inlineData: { mimeType: uploadedFile.type, data: base64Data } }
+                                ]
+                            }],
+                            generationConfig: {
+                                responseModalities: ['TEXT', 'IMAGE']
+                            },
+                        };
+
+                        const response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(`API 응답 오류: ${response.status} ${errorData.message || response.statusText}`);
+                        }
+
+                        const result = await response.json();
+                        const imageData = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+
+                        if (!imageData) {
+                            throw new Error(`이미지 데이터를 찾을 수 없습니다: 생성 실패 원인: STOP`);
+                        }
+
+                        // 이미지 카드 생성
+                        const imageWrapper = document.createElement('div');
+                        imageWrapper.className = "image-card p-4 flex flex-col items-center";
+                        
+                        const img = document.createElement('img');
+                        img.src = `data:image/png;base64,${imageData}`;
+                        img.alt = `생성된 프로필 사진 #${totalImagesGenerated}`;
+                        img.className = "w-full rounded-xl shadow-md";
+                        
+                        // 다운로드 버튼 생성
+                        const downloadButton = document.createElement('button');
+                        downloadButton.textContent = '다운로드';
+                        downloadButton.className = "bg-gray-800 text-white text-xs px-3 py-1 rounded-full mt-4 hover:bg-gray-700 transition";
+                        downloadButton.addEventListener('click', (event) => {
+                            event.stopPropagation(); // 카드 클릭 이벤트 방지
+                            downloadImage(imageData, `profile_picture_${totalImagesGenerated}.png`);
+                        });
+
+                        imageWrapper.appendChild(img);
+                        imageWrapper.appendChild(downloadButton);
+                        imageGrid.appendChild(imageWrapper);
+                        
+                        success = true;
+                        
+                    } catch (error) {
+                        console.error(`이미지 생성 시도 #${retries + 1} 실패:`, error);
+                        retries++;
+                        if (retries < MAX_RETRIES) {
+                            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                        } else {
+                            allSuccessful = false;
+                            console.error(`이미지 #${totalImagesGenerated} 최종 실패`);
+                        }
+                    }
+                }
+            }
+            
+            showLoading(false);
+            showButtons(true);
+
+            if (!allSuccessful) {
+                showError("일부 이미지 생성에 실패했어요. 다시 시도해 보시거나 다른 사진을 올려주시면 더 좋을 거예요!");
+            }
+        };
+
+        // UI 상태 관리 헬퍼 함수
+        const showLoading = (isLoading) => {
+            loadingSpinner.classList.toggle('hidden', !isLoading);
+            fileUploadArea.classList.toggle('hidden', isLoading);
+        };
+
+        const showButtons = (isGenerated) => {
+            generateBtn.classList.toggle('hidden', isGenerated);
+            actionButtons.classList.toggle('hidden', !isGenerated);
+        };
+
+        const showError = (message) => {
+            if (message) {
+                errorMessage.textContent = message;
+                errorMessage.classList.remove('hidden');
+            } else {
+                errorMessage.classList.add('hidden');
+            }
+        };
+
+        // 앱 초기화 함수
+        const resetApp = () => {
+            uploadedFile = null;
+            fileInput.value = '';
+            fileInfo.textContent = '여기를 클릭하거나 파일을 끌어다 놓으세요.';
+            imageGrid.innerHTML = '';
+            showButtons(false);
+            showLoading(false);
+            showError(null);
+            fileUploadArea.classList.remove('hidden');
+        };
+
+        // 이벤트 리스너 등록
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                uploadedFile = file;
+                fileInfo.textContent = `${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+                generateBtn.classList.remove('hidden');
+                actionButtons.classList.add('hidden');
+                showError(null);
+                imageGrid.innerHTML = '';
+            }
+        });
+
+        // 클릭 시 파일 입력 창 열기
+        fileUploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // 드래그 앤 드롭 이벤트 처리
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            fileUploadArea.addEventListener(eventName, e => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            fileUploadArea.addEventListener(eventName, () => {
+                fileUploadArea.classList.add('active');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            fileUploadArea.addEventListener(eventName, () => {
+                fileUploadArea.classList.remove('active');
+            }, false);
+        });
+
+        fileUploadArea.addEventListener('drop', e => {
+            const file = e.dataTransfer.files[0];
+            fileInput.files = e.dataTransfer.files;
+            fileInput.dispatchEvent(new Event('change'));
+        }, false);
+
+        // 버튼 클릭 이벤트
+        generateBtn.addEventListener('click', generateImages);
+        regenerateBtn.addEventListener('click', generateImages);
+        resetBtn.addEventListener('click', resetApp);
+    </script>
+
+</body>
+</html>
